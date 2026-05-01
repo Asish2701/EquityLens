@@ -24,7 +24,11 @@ const palette = {
   mint: "#b7d9c3",
 };
 
-const API_BASE = "http://localhost:8000";
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ??
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8000"
+    : "");
 const AGE_ORDER = {
   NinetyDaysAgo: 1,
   SixtyDaysAgo: 2,
