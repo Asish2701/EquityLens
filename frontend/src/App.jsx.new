@@ -1,0 +1,441 @@
+import { useMemo, useState } from "react";
+
+const initialRuns = [
+  {
+    id: "TATASTEEL-initial",
+    ticker: "TATASTEEL",
+    generatedAt: "Not fetched yet",
+    priceTarget: null,
+    priceTargetSnapshots: [],
+    recommendation: null,
+    recommendationSnapshots: [],
+    series: [165, 187, 210, 212],
+    raw: null,
+  },
+];
+
+const palette = {
+  ink: "#0e1414",
+  olive: "#8f8a3b",
+  amber: "#f6c66f",
+  teal: "#1f6f6c",
+  cream: "#f5f0e6",
+  rust: "#c06a34",
+  mint: "#b7d9c3",
+};
+
+const API_BASE = "http://localhost:8000";
+const AGE_ORDER = {
+  NinetyDaysAgo: 1,
+  SixtyDaysAgo: 2,
+  ThirtyDaysAgo: 3,
+  OneWeekAgo: 4,
+  Current: 5,
+};
+
+function isNumber(value) {
+  return typeof value === "number" && !Number.isNaN(value);
+}
+
+function formatNumber(value) {
+  if (!isNumber(value)) {
+    return "N/A";
+  }
+  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatCurrency(value, currency) {
+  if (!isNumber(value)) {
+    return "N/A";
+  }
+  if (currency) {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value);
+    } catch (err) {
+      return formatNumber(value);
+    }
+  }
+  return formatNumber(value);
+}
+
+function normalizeArray(value, nestedKey) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value && Array.isArray(value[nestedKey])) {
+    return value[nestedKey];
+  }
+  return [];
+}
+
+function normalizePayload(payload) {
+  const priceTarget = payload?.priceTarget ?? payload?.price_target ?? payload?.data?.priceTarget ?? null;
+  const priceTargetSnapshots = normalizeArray(
+    payload?.priceTargetSnapshots ?? payload?.price_target_snapshots,
+    "PriceTargetSnapshot"
+  );
+  const recommendation = payload?.recommendation ?? payload?.recommendationSummary ?? payload?.data?.recommendation ?? null;
+  const recommendationSnapshots = normalizeArray(
+    payload?.recommendationSnapshots ?? payload?.recommendation_snapshots,
+    "RecommendationSnapshot"
+  );
+
+  return {
+    priceTarget,
+    priceTargetSnapshots,
+    recommendation,
+    recommendationSnapshots,
+  };
+}
+
+function sortSnapshots(snapshots) {
+  return [...snapshots].sort(
+    (left, right) => (AGE_ORDER[left?.Age] ?? 99) - (AGE_ORDER[right?.Age] ?? 99)
+  );
+}
+
+function buildSeriesFromSnapshots(snapshots, priceTarget) {
+  const series = sortSnapshots(snapshots)
+    .map((snap) => snap?.Mean ?? snap?.Median)
+    .filter(isNumber);
+
+  if (series.length) {
+    return series;
+  }
+
+  if (priceTarget) {
+    const fallback = [priceTarget.Low, priceTarget.Median, priceTarget.Mean, priceTarget.High].filter(isNumber);
+    if (fallback.length) {
+      return fallback;
+    }
+  }
+
+  return [165, 187, 210, 212];
+}
+
+function buildPath(points, width, height) {
+  if (!points || points.length < 2) {
+    return "";
+  }
+
+  const max = Math.max(...points);
+  const min = Math.min(...points);
+  const span = max - min || 1;
+
+  return points
+    .map((value, index) => {
+      const x = (index / (points.length - 1)) * width;
+      const y = height - ((value - min) / span) * height;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function App() {
+  const [runs, setRuns] = useState(initialRuns);
+  const [activeRunId, setActiveRunId] = useState(initialRuns[0].id);
+  const [form, setForm] = useState({ ticker: "TATASTEEL" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const activeRun = useMemo(
+    () => runs.find((run) => run.id === activeRunId) ?? runs[0],
+    [runs, activeRunId]
+  );
+
+  const priceTarget = activeRun.priceTarget ?? {};
+  const recommendation = activeRun.recommendation ?? {};
+
+  const sortedPriceSnapshots = useMemo(
+    () => sortSnapshots(activeRun.priceTargetSnapshots ?? []),
+    [activeRun]
+  );
+
+  const sortedRecommendationSnapshots = useMemo(
+    () => sortSnapshots(activeRun.recommendationSnapshots ?? []),
+    [activeRun]
+  );
+
+  const chartPath = useMemo(
+    () => buildPath(activeRun.series ?? [], 420, 140),
+    [activeRun]
+  );
+
+  const snapshotAges = sortedPriceSnapshots.map((snap) => snap.Age).filter(Boolean);
+
+  function handleChange(event) {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const ticker = form.ticker.trim().toUpperCase() || "TATASTEEL";
+    if (!ticker || ticker.length === 0) {
+      setError("Please enter a ticker symbol.");
+      return;
+    }
+
+    const params = new URLSearchParams({ stock_id: ticker });
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_BASE}/api/forecast?${params.toString()}`);
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Failed to fetch target price.");
+      }
+      const payload = await response.json();
+      const normalized = normalizePayload(payload);
+      const series = buildSeriesFromSnapshots(normalized.priceTargetSnapshots, normalized.priceTarget);
+
+      const newRun = {
+        id: `${ticker}-${new Date().toISOString().slice(0, 10)}`,
+        ticker,
+        generatedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
+        priceTarget: normalized.priceTarget,
+        priceTargetSnapshots: normalized.priceTargetSnapshots,
+        recommendation: normalized.recommendation,
+        recommendationSnapshots: normalized.recommendationSnapshots,
+        series,
+        raw: payload,
+      };
+
+      setRuns((prev) => [newRun, ...prev]);
+      setActiveRunId(newRun.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch target price.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="page">
+      <div className="glow" />
+      <header className="hero">
+        <div>
+          <p className="eyebrow">Retro Finance Lab</p>
+          <h1>
+            Stock Future <span>Analysis</span>
+          </h1>
+          <p className="subtitle">
+            Live target price and analyst recommendations from IndianAPI, wired through a local FastAPI proxy.
+          </p>
+        </div>
+        <div className="hero-card">
+          <div className="hero-chip">{activeRun.ticker}</div>
+          <h2>{formatCurrency(priceTarget.Mean, priceTarget.CurrencyCode)}</h2>
+          <p>Target price mean</p>
+          <div className="hero-row">
+            <span>High</span>
+            <strong>{formatCurrency(priceTarget.High, priceTarget.CurrencyCode)}</strong>
+          </div>
+          <div className="hero-row">
+            <span>Low</span>
+            <strong>{formatCurrency(priceTarget.Low, priceTarget.CurrencyCode)}</strong>
+          </div>
+          <div className="hero-row">
+            <span>Analysts</span>
+            <strong>{formatNumber(priceTarget.NumberOfEstimates)}</strong>
+          </div>
+        </div>
+      </header>
+
+      <main className="grid">
+        <section className="panel panel-form">
+          <h3>Fetch Target Price</h3>
+          <form onSubmit={handleSubmit} className="form">
+            <label>
+              Stock ticker
+              <input name="ticker" value={form.ticker} onChange={handleChange} placeholder="TATASTEEL" />
+            </label>
+            <button type="submit" disabled={loading}>
+              {loading ? "Fetching..." : "Get Target Price"}
+            </button>
+          </form>
+          {error ? <p className="panel-error">{error}</p> : null}
+          <p className="panel-note">Only the ticker is required. The backend fetches all target price data.</p>
+        </section>
+
+        <section className="panel panel-results">
+          <div className="panel-head">
+            <h3>Price Target Summary</h3>
+            <span>{activeRun.generatedAt}</span>
+          </div>
+          <h4 className="panel-title">Price Target</h4>
+          <div className="result-grid">
+            <div>
+              <p className="label">Ticker</p>
+              <p className="value">{activeRun.ticker}</p>
+            </div>
+            <div>
+              <p className="label">Currency</p>
+              <p className="value">{priceTarget.CurrencyCode ?? "N/A"}</p>
+            </div>
+            <div>
+              <p className="label">Mean</p>
+              <p className="value">{formatCurrency(priceTarget.Mean, priceTarget.CurrencyCode)}</p>
+            </div>
+            <div>
+              <p className="label">Median</p>
+              <p className="value">{formatCurrency(priceTarget.Median, priceTarget.CurrencyCode)}</p>
+            </div>
+            <div>
+              <p className="label">High</p>
+              <p className="value">{formatCurrency(priceTarget.High, priceTarget.CurrencyCode)}</p>
+            </div>
+            <div>
+              <p className="label">Low</p>
+              <p className="value">{formatCurrency(priceTarget.Low, priceTarget.CurrencyCode)}</p>
+            </div>
+            <div>
+              <p className="label">Unverified Mean</p>
+              <p className="value">{formatCurrency(priceTarget.UnverifiedMean, priceTarget.CurrencyCode)}</p>
+            </div>
+            <div>
+              <p className="label">Preliminary Mean</p>
+              <p className="value">{formatCurrency(priceTarget.PreliminaryMean, priceTarget.CurrencyCode)}</p>
+            </div>
+            <div>
+              <p className="label">Estimates</p>
+              <p className="value">{formatNumber(priceTarget.NumberOfEstimates)}</p>
+            </div>
+            <div>
+              <p className="label">Std Dev</p>
+              <p className="value">{formatNumber(priceTarget.StandardDeviation)}</p>
+            </div>
+          </div>
+
+          <h4 className="panel-title">Recommendation</h4>
+          <div className="result-grid">
+            <div>
+              <p className="label">Mean</p>
+              <p className="value">{formatNumber(recommendation.Mean)}</p>
+            </div>
+            <div>
+              <p className="label">High</p>
+              <p className="value">{formatNumber(recommendation.High)}</p>
+            </div>
+            <div>
+              <p className="label">Low</p>
+              <p className="value">{formatNumber(recommendation.Low)}</p>
+            </div>
+            <div>
+              <p className="label">Unverified Mean</p>
+              <p className="value">{formatNumber(recommendation.UnverifiedMean)}</p>
+            </div>
+            <div>
+              <p className="label">Preliminary Mean</p>
+              <p className="value">{formatNumber(recommendation.PreliminaryMean)}</p>
+            </div>
+            <div>
+              <p className="label">Analysts</p>
+              <p className="value">{formatNumber(recommendation.NumberOfRecommendations)}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel panel-target-snapshots">
+          <div className="panel-head">
+            <h3>Price Target Snapshots</h3>
+            <span>{sortedPriceSnapshots.length} entries</span>
+          </div>
+          {sortedPriceSnapshots.length ? (
+            <div className="data-table">
+              <div className="table-row six table-head">
+                <span>Age</span>
+                <span>Mean</span>
+                <span>Median</span>
+                <span>High</span>
+                <span>Low</span>
+                <span>Estimates</span>
+              </div>
+              {sortedPriceSnapshots.map((snap, index) => (
+                <div className="table-row six" key={`${snap.Age}-${index}`}>
+                  <span>{snap.Age ?? "N/A"}</span>
+                  <span>{formatCurrency(snap.Mean, snap.CurrencyCode)}</span>
+                  <span>{formatCurrency(snap.Median, snap.CurrencyCode)}</span>
+                  <span>{formatCurrency(snap.High, snap.CurrencyCode)}</span>
+                  <span>{formatCurrency(snap.Low, snap.CurrencyCode)}</span>
+                  <span>{formatNumber(snap.NumberOfEstimates)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="panel-empty">No price target snapshots yet.</p>
+          )}
+        </section>
+
+        <section className="panel panel-recommendation-snapshots">
+          <div className="panel-head">
+            <h3>Recommendation Snapshots</h3>
+            <span>{sortedRecommendationSnapshots.length} entries</span>
+          </div>
+          {sortedRecommendationSnapshots.length ? (
+            <div className="data-table">
+              <div className="table-row five table-head">
+                <span>Age</span>
+                <span>Mean</span>
+                <span>High</span>
+                <span>Low</span>
+                <span>Analysts</span>
+              </div>
+              {sortedRecommendationSnapshots.map((snap, index) => (
+                <div className="table-row five" key={`${snap.Age}-${index}`}>
+                  <span>{snap.Age ?? "N/A"}</span>
+                  <span>{formatNumber(snap.Mean)}</span>
+                  <span>{formatNumber(snap.High)}</span>
+                  <span>{formatNumber(snap.Low)}</span>
+                  <span>{formatNumber(snap.NumberOfRecommendations)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="panel-empty">No recommendation snapshots yet.</p>
+          )}
+        </section>
+
+        <section className="panel panel-chart">
+          <h3>Snapshot Trend</h3>
+          <div className="chart-shell">
+            <svg viewBox="0 0 420 140" role="img" aria-label="Target price snapshots">
+              <path d={chartPath} fill="none" stroke={palette.teal} strokeWidth="3" />
+              <circle cx="410" cy="16" r="6" fill={palette.rust} />
+            </svg>
+            <div className="chart-caption">
+              {snapshotAges.length ? `Mean by age: ${snapshotAges.join(" -> ")}` : "Waiting for snapshot data."}
+            </div>
+          </div>
+        </section>
+
+        <section className="panel panel-history">
+          <div className="panel-head">
+            <h3>Recent Runs</h3>
+            <span>{runs.length} total</span>
+          </div>
+          <div className="history-list">
+            {runs.map((run) => (
+              <button
+                type="button"
+                key={run.id}
+                className={`history-item ${run.id === activeRun.id ? "active" : ""}`}
+                onClick={() => setActiveRunId(run.id)}
+              >
+                <div>
+                  <p className="history-title">{run.ticker}</p>
+                  <p className="history-sub">{run.generatedAt}</p>
+                </div>
+                <span>{formatCurrency(run.priceTarget?.Mean, run.priceTarget?.CurrencyCode)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export default App;

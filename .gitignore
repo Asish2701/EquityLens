@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+.vscode/
+.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Data and outputs
+data/raw/*.csv
+data/processed/*.csv
+models/*.pkl
+reports/*.png
+reports/*.json

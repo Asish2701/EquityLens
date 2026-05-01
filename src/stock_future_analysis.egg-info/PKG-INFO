@@ -1,0 +1,48 @@
+Metadata-Version: 2.4
+Name: stock-future-analysis
+Version: 0.1.0
+Summary: Stock future analysis and prediction
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+
+# Stock Future analysis and prediction
+
+A lightweight Python project to fetch market data, engineer features, and predict next-week close prices.
+
+## Setup
+
+1. Create and activate a virtual environment.
+2. Install dependencies:
+
+```
+pip install -r requirements.txt
+```
+
+## Usage
+
+Fetch data:
+
+```
+python -m stock_future_analysis fetch --ticker AAPL --start 2015-01-01
+```
+
+Train and evaluate:
+
+```
+python -m stock_future_analysis train --ticker AAPL --start 2015-01-01
+```
+
+Train, evaluate, and forecast the next-week close:
+
+```
+python -m stock_future_analysis run --ticker AAPL --start 2015-01-01
+```
+
+Outputs are saved to:
+- data/raw/ for downloaded CSVs
+- models/ for trained models
+- reports/ for metrics and charts
+
+## Notes
+
+Predictions are experimental and for educational use only. This is not financial advice.
