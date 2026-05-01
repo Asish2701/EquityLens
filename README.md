@@ -89,7 +89,7 @@ Typical flow for Vercel:
 
 ### Vercel
 
-This repository includes a root [vercel.json](vercel.json) and a top-level FastAPI app at [app.py](app.py) so the frontend and forecast API can be deployed together.
+This repository includes a root [vercel.json](vercel.json) and a top-level FastAPI app at [main.py](main.py) so the frontend and forecast API can be deployed together.
 
 ## Notes
 
