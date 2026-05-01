@@ -73,7 +73,7 @@ Outputs are saved to:
 
 ## Deployment
 
-The app can run as a single Vercel deployment with the React frontend and a Python `/api/forecast` function on the same domain. For deployment, set these environment variables:
+The app can run as a single Vercel deployment with the React frontend and a Python `/api/forecast` endpoint on the same domain. For deployment, set these environment variables:
 
 - `INDIANAPI_KEY` for the Python proxy function.
 - `FRONTEND_ORIGINS` or `CORS_ORIGINS` if you also run the local FastAPI app.
@@ -85,11 +85,11 @@ Typical flow for Vercel:
 2. Keep the project root at the repository root.
 3. Set `INDIANAPI_KEY` in the Vercel project settings.
 4. Leave `VITE_API_BASE_URL` unset to use the same-origin `/api/forecast` function, or set it to an external backend URL if you deploy the API elsewhere.
-5. Vercel will run `cd frontend && npm install`, `cd frontend && npm run build`, and publish `frontend/dist`.
+5. Vercel will run `cd frontend && npm install && npm run build` during the FastAPI deployment.
 
 ### Vercel
 
-This repository includes a root [vercel.json](vercel.json) and a Python function at [api/forecast.py](api/forecast.py) so the frontend and forecast API can be deployed together.
+This repository includes a root [vercel.json](vercel.json) and a top-level FastAPI app at [app.py](app.py) so the frontend and forecast API can be deployed together.
 
 ## Notes
 
