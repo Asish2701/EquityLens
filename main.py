@@ -3,13 +3,24 @@ from __future__ import annotations
 import os
 import json
 from pathlib import Path
+import logging
+import traceback
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+load_dotenv()
+
+# logger
+logging.basicConfig()
+logger = logging.getLogger("stock_future")
+logger.setLevel(logging.INFO)
 
 BASE_URL = "https://stock.indianapi.in"
 FRONTEND_DIST = Path(__file__).resolve().parent / "frontend" / "dist"
@@ -20,6 +31,25 @@ DEFAULT_DATA_TYPE = "Actuals"
 DEFAULT_AGE = "Current"
 
 app = FastAPI(title="EquityLens")
+
+
+def _parse_origins(value: str | None) -> list[str]:
+    if not value:
+        return [
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:5174",
+        ]
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_parse_origins(os.getenv("FRONTEND_ORIGINS") or os.getenv("CORS_ORIGINS")),
+    allow_methods=["GET", "OPTIONS", "HEAD"],
+    allow_headers=["*"],
+)
 
 
 def _ensure_api_key() -> str:
@@ -34,15 +64,26 @@ def _request_indian_api(path: str, params: dict[str, str]) -> object:
     url = f"{BASE_URL}{path}?{urlencode(params)}"
     request = Request(url, headers={"x-api-key": api_key})
 
+    logger.info("Requesting upstream %s", url)
     try:
         with urlopen(request, timeout=20) as response:
             body = response.read().decode("utf-8")
+            logger.info("Upstream response for %s: %s", path, (body[:100] + '...') if len(body) > 100 else body)
             return json.loads(body) if body else {}
     except HTTPError as error:
-        detail = error.read().decode("utf-8") if error.fp else str(error)
-        raise HTTPException(status_code=error.code, detail=detail) from error
+        try:
+            detail_body = error.read().decode("utf-8") if error.fp else str(error)
+        except Exception:
+            detail_body = str(error)
+        logger.error("HTTPError calling upstream %s: %s", url, detail_body)
+        raise HTTPException(status_code=error.code, detail=f"Upstream HTTP {error.code}: {detail_body}") from error
     except URLError as error:
-        raise HTTPException(status_code=502, detail=str(error)) from error
+        logger.exception("URLError calling upstream %s", url)
+        raise HTTPException(status_code=502, detail=f"Upstream URLError: {error}") from error
+    except Exception as error:
+        tb = traceback.format_exc()
+        logger.error("Unexpected error calling upstream %s: %s\n%s", url, error, tb)
+        raise HTTPException(status_code=500, detail="Unexpected upstream error") from error
 
 
 @app.get("/api/forecast")
