@@ -7,5 +7,4 @@ seaborn
 joblib
 fastapi
 uvicorn
-python-dotenv
 requests

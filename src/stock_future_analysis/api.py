@@ -4,14 +4,10 @@ import os
 from typing import Any
 
 import requests
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-load_dotenv()
-
 BASE_URL = "https://stock.indianapi.in"
-API_KEY = os.getenv("INDIANAPI_KEY")
 
 DEFAULT_MEASURE_CODE = "EPS"
 DEFAULT_PERIOD_TYPE = "Annual"
@@ -40,9 +36,10 @@ app.add_middleware(
 
 
 def _ensure_api_key() -> str:
-    if not API_KEY:
+    api_key = os.getenv("INDIANAPI_KEY")
+    if not api_key:
         raise HTTPException(status_code=500, detail="INDIANAPI_KEY is not configured")
-    return API_KEY
+    return api_key
 
 
 def _request_indian_api(path: str, params: dict[str, str]) -> Any:
