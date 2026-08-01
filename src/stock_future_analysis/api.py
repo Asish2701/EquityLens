@@ -4,8 +4,11 @@ import os
 from typing import Any
 
 import requests
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 BASE_URL = "https://stock.indianapi.in"
 

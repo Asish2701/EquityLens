@@ -40,10 +40,10 @@ python -m stock_future_analysis run --ticker AAPL --start 2015-01-01
 ## Live API (IndianAPI)
 
 The frontend can fetch live forecast data through a local FastAPI proxy that keeps your API key
-server-side. The app does not load a local `.env` file at runtime; set the environment variable
-directly in your shell for local development or in the Vercel dashboard for deployment.
+server-side. For local development, you can place the key in a `.env` file; on Vercel, set the
+environment variable in the dashboard.
 
-1. Set the API key as an environment variable:
+1. Create a `.env` file in the project root or set the API key in your shell:
 
 ```
 INDIANAPI_KEY=your_key_here
