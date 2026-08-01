@@ -5,11 +5,15 @@
     {
       "src": "requirements.txt",
       "use": "@vercel/python@4.0",
-      "config": { "maxLambdaSize": "15mb" }
+      "config": { 
+        "maxLambdaSize": "15mb",
+        "runtime": "python3.13"
+      }
     },
     {
       "src": "api/index.py",
-      "use": "@vercel/python@4.0"
+      "use": "@vercel/python@4.0",
+      "config": { "runtime": "python3.13" }
     }
   ],
   "routes": [
