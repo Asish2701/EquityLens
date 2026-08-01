@@ -1,3 +1,5 @@
+import importlib
+
 import pandas as pd
 
 from stock_future_analysis.features import build_features
@@ -19,3 +21,8 @@ def test_build_features_smoke():
     assert not X.empty
     assert len(X) == len(y)
     assert "target" in full.columns
+
+
+def test_vercel_entrypoint_exports_app():
+    module = importlib.import_module("api.index")
+    assert hasattr(module, "app")
