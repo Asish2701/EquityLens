@@ -23,7 +23,12 @@ logger = logging.getLogger("stock_future")
 logger.setLevel(logging.INFO)
 
 BASE_URL = "https://stock.indianapi.in"
-FRONTEND_DIST = Path(__file__).resolve().parent / "frontend" / "dist"
+
+# prefer Vercel public dir, fall back to frontend/dist
+ROOT_DIR = Path(__file__).resolve().parent
+FRONTEND_DIST = ROOT_DIR / "public"
+if not FRONTEND_DIST.exists():
+    FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 
 DEFAULT_MEASURE_CODE = "EPS"
 DEFAULT_PERIOD_TYPE = "Annual"
