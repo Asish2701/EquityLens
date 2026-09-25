@@ -1,33 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd frontend && npm install && npm run build && cp -r dist ../public",
-  "builds": [
-    {
-      "src": "requirements.txt",
-      "use": "@vercel/python@4.0",
-      "config": { 
-        "maxLambdaSize": "15mb",
-        "runtime": "python3.13"
-      }
-    },
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python@4.0",
-      "config": { "runtime": "python3.13" }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "/public/assets/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/index.html"
-    }
-  ]
+  "buildCommand": "cd frontend && npm ci && npm run build",
+  "outputDirectory": "frontend/dist"
 }
